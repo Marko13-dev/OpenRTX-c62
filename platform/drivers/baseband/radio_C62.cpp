@@ -229,7 +229,7 @@ void radio_enableTx()
 
     // depending on power level set PWM duty cycle for APC voltage control
     // Maybe need table for this instead of crude linear mapping, and also consider frequency dependence of PA efficiency
-    platform_set_tx_power(std::min(config->txPower * 100 / 5000, 100U)); // crude linear mapping of power to duty cycle, max at 5W
+    platform_set_tx_power(std::min(config->txPower * config->txPower * 100 / (5000 * 5000), 100U)); // crude quadratic mapping of power to duty cycle, max at 5W
 
     bk4819_tx_on();
     radioStatus = TX;
