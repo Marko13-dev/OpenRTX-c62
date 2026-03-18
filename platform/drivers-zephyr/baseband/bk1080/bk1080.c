@@ -2,6 +2,7 @@
 
 
 #include "bk1080.h"
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/init.h>
