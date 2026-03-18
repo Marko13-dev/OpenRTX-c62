@@ -2,7 +2,6 @@
 
 
 #include "bk1080.h"
-#include <interfaces/delays.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/device.h>
 #include <zephyr/init.h>
@@ -90,18 +89,18 @@ static int I2C_WriteBuffer(const void *pBuffer, uint8_t Size);
 
 static void I2C_Start(void)
 {
-	BK1080_SDA_HIGH; delayUs(1);
-	BK1080_SCK_HIGH; delayUs(1);
-	BK1080_SDA_LOW; delayUs(1);
-	BK1080_SCK_LOW; delayUs(1);
+	BK1080_SDA_HIGH; k_usleep(1);
+	BK1080_SCK_HIGH; k_usleep(1);
+	BK1080_SDA_LOW; k_usleep(1);
+	BK1080_SCK_LOW; k_usleep(1);
 }
 
 static void I2C_Stop(void)
 {
-	BK1080_SDA_LOW; delayUs(1);
-	BK1080_SCK_LOW; delayUs(1);
-	BK1080_SCK_HIGH; delayUs(1);
-	BK1080_SDA_HIGH; delayUs(1);
+	BK1080_SDA_LOW; k_usleep(1);
+	BK1080_SCK_LOW; k_usleep(1);
+	BK1080_SCK_HIGH; k_usleep(1);
+	BK1080_SDA_HIGH; k_usleep(1);
 }
 
 static uint8_t I2C_Read(bool bFinal)
@@ -113,31 +112,31 @@ static uint8_t I2C_Read(bool bFinal)
 	Data = 0;
 	for (i = 0; i < 8; i++) {
 		BK1080_SCK_LOW;
-		delayUs(1);
+		k_usleep(1);
 		BK1080_SCK_HIGH;
-		delayUs(1);
+		k_usleep(1);
 		Data <<= 1;
-		delayUs(1);
+		k_usleep(1);
 		if (BK1080_SDA_READ) {
 			Data |= 1U;
 		}
 		BK1080_SCK_LOW;
-		delayUs(1);
+		k_usleep(1);
 	}
 
 	BK1080_SDA_DIR_OUT;
 	BK1080_SCK_LOW;
-	delayUs(1);
+	k_usleep(1);
 	if (bFinal) {
 		BK1080_SDA_HIGH;
 	} else {
 		BK1080_SDA_LOW;
 	}
-	delayUs(1);
+	k_usleep(1);
 	BK1080_SCK_HIGH;
-	delayUs(1);
+	k_usleep(1);
 	BK1080_SCK_LOW;
-	delayUs(1);
+	k_usleep(1);
 
 	return Data;
 }
@@ -148,7 +147,7 @@ static int I2C_Write(uint8_t Data)
 	int ret = -1;
 
 	BK1080_SCK_LOW;
-	delayUs(1);
+	k_usleep(1);
 	for (i = 0; i < 8; i++) {
 		if ((Data & 0x80) == 0) {
 			BK1080_SDA_LOW;
@@ -156,18 +155,18 @@ static int I2C_Write(uint8_t Data)
 			BK1080_SDA_HIGH;
 		}
 		Data <<= 1;
-		delayUs(1);
+		k_usleep(1);
 		BK1080_SCK_HIGH;
-		delayUs(1);
+		k_usleep(1);
 		BK1080_SCK_LOW;
-		delayUs(1);
+		k_usleep(1);
 	}
 
 	BK1080_SDA_DIR_IN;
 	BK1080_SDA_HIGH;
-	delayUs(1);
+	k_usleep(1);
 	BK1080_SCK_HIGH;
-	delayUs(1);
+	k_usleep(1);
 
 	for (i = 0; i < 255; i++) {
 		if (BK1080_SDA_READ == 0) {
@@ -177,7 +176,7 @@ static int I2C_Write(uint8_t Data)
 	}
 
 	BK1080_SCK_LOW;
-	delayUs(1);
+	k_usleep(1);
 	BK1080_SDA_DIR_OUT;
 	BK1080_SDA_LOW;
 
@@ -190,11 +189,11 @@ static int I2C_ReadBuffer(void *pBuffer, uint8_t Size)
 	uint8_t i;
 
 	for (i = 0; i < Size - 1; i++) {
-		delayUs(1);
+		k_usleep(1);
 		pData[i] = I2C_Read(false);
 	}
 
-    delayUs(1);
+    k_usleep(1);
 	pData[i] = I2C_Read(true);
 
 	return Size;
@@ -251,12 +250,12 @@ void BK1080_Init(uint32_t freq, uint8_t band)
 			for (i = 0; i < ARRAY_SIZE(BK1080_RegisterTable); i++)
 				BK1080_WriteRegister(i, BK1080_RegisterTable[i]);
 
-			delayUs(250000);
+			k_msleep(250);
 
 			BK1080_WriteRegister(BK1080_REG_25_INTERNAL, 0xA83C);
 			BK1080_WriteRegister(BK1080_REG_25_INTERNAL, 0xA8BC);
 
-			delayUs(60000);
+			k_msleep(60);
 
 			gIsInitBK1080 = true;
 		}
@@ -288,7 +287,7 @@ void BK1080_SetFrequency(uint32_t frequency, uint8_t band)
 	BK1080_WriteRegister(BK1080_REG_05_SYSTEM_CONFIGURATION2, regval);
 
 	BK1080_WriteRegister(BK1080_REG_03_CHANNEL, channel);
-	delayMs(10);
+	k_msleep(10);
 	BK1080_WriteRegister(BK1080_REG_03_CHANNEL, channel | 0x8000);
 }
 
