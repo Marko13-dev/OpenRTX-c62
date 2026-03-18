@@ -164,6 +164,14 @@ typedef enum
     BK4819_REG_7E = 0x7E,
 } bk4819_reg_t;
 
+enum BK4819_AF_Type_t
+{
+    BK4819_AF_TYPE_MUTE = 0u,
+    BK4819_AF_TYPE_FM   = 1u,
+    BK4819_AF_TYPE_BEEP = 3u,
+    BK4819_AF_TYPE_AM   = 7u
+};
+
 typedef enum
 {
     BK4819_INT_FSKTF = BIT(15),   // FSK TX Finished Interrupt

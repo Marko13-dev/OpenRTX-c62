@@ -31,6 +31,8 @@
 #include <algorithm>
 #include <string>
 
+#include <zephyr/kernel.h>
+
 #include "drivers-zephyr/baseband/bk4819/bk4819.h"
 #include "radioUtils.h"
 
@@ -88,7 +90,7 @@ void radio_init(const rtxStatus_t* rtxState)
     // nvm_readCalibData(&calData);
 
     //bk4819_init();  // already init by zephyr driver
-    BK4819_SetAF(0);
+    BK4819_SetAF(BK4819_AF_TYPE_MUTE); // Mute audio output until modulation is set
     
     bk4819_gpio_pin_set(GPIO_VHF_RX_LNA, false); // VHF RX LNA
     bk4819_gpio_pin_set(GPIO_UHF_RX_LNA, false); // UHF RX LNA
@@ -117,7 +119,21 @@ void radio_tuneVcxo(const int16_t vhfOffset, const int16_t uhfOffset)
 
 void radio_setOpmode(const enum opmode mode)
 {
-    (void)mode;
+    switch(mode)
+    {
+        case OPMODE_FM:
+            bk4819_set_modulation(true);  // BK4819 in FM mode
+            break;
+
+        case OPMODE_M17:
+            // TODO: disable BK4819 audio filters for M17 mode
+            bk4819_SetFilterBandwidth(BW_25);  // Set bandwidth to 25kHz for proper deviation
+            bk4819_set_modulation(true);  // BK4819 in FM mode
+            break;
+
+        default:
+            break;
+    }
 }
 
 bool radio_checkRxDigitalSquelch()
@@ -133,7 +149,7 @@ void radio_enableAfOutput()
 
 void radio_disableAfOutput()
 {
-    BK4819_SetAF(0);
+    BK4819_SetAF(BK4819_AF_TYPE_MUTE);
 }
 
 void radio_checkVOX(){
@@ -159,11 +175,13 @@ void radio_setRxFilters(uint32_t freq)
 
 void radio_enableRx()
 {
-    bk4819_gpio_pin_set(0, false); // VHF RX LNA
-    bk4819_gpio_pin_set(1, false); // UHF RX LNA
-    bk4819_gpio_pin_set(2, false); // UHF TX PA
-    bk4819_gpio_pin_set(3, false); // UHF TX PA
-    bk4819_gpio_pin_set(4, false); // ALC / TX LED
+    bk4819_gpio_pin_set(GPIO_VHF_RX_LNA, false); // VHF RX LNA
+    bk4819_gpio_pin_set(GPIO_UHF_RX_LNA, false); // UHF RX LNA
+    bk4819_gpio_pin_set(GPIO_VHF_TX_PA, false); // VHF TX PA
+    bk4819_gpio_pin_set(GPIO_UHF_TX_PA, false); // UHF TX PA
+    bk4819_gpio_pin_set(GPIO_ALC_TX_LED, false); // ALC / TX LED
+    //Before enable RX path delay to allow hardware to settle
+    k_sleep(K_USEC(100));
 
     radio_setRxFilters(config->rxFrequency);
     bk4819_set_freq(config->rxFrequency);
@@ -186,6 +204,8 @@ void radio_enableTx()
     bk4819_gpio_pin_set(GPIO_VHF_TX_PA,  false); // VHF TX PA
     bk4819_gpio_pin_set(GPIO_UHF_TX_PA,  false); // UHF TX PA
     bk4819_gpio_pin_set(GPIO_ALC_TX_LED, false); // ALC / TX LED
+    //Before enable TX path delay to allow hardware to settle
+    k_sleep(K_USEC(100));
     
     // TODO: do this better
     if (config->txFrequency < 136000000 || config->txFrequency > 600000000)
