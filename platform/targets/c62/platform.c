@@ -26,6 +26,7 @@
 #include <zephyr/drivers/adc.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/drivers/pinctrl.h>
 #include <zephyr/kernel.h>
 #include <interfaces/audio.h>
 #include <math.h>
@@ -72,7 +73,8 @@ struct adc_sequence sequence = {
 	.resolution = 11,  // 11-bit resolution
 };
 
-
+#define ADC_RAW_CHARGING_THRESHOLD 2100
+static bool is_battery_charging = false;
 static int battery_init(void);
 
 
@@ -182,6 +184,14 @@ static int battery_init(void)
         printk("ADC device not ready\n");
         return -1;
     }
+
+    // Apply pin configuration for ADC pins (because it is overwritten by DSP firmware loading, we need to re-apply it here)
+    struct adc_csk6_cfg {
+	    uint8_t pin;
+	    const struct pinctrl_dev_config *pcfg;
+    };
+    const struct adc_csk6_cfg *config = adc_dev->config;
+    pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
     
     // Configure ADC channel
     struct adc_channel_cfg channel_cfg = {
@@ -222,8 +232,7 @@ static int battery_init(void)
  */
 uint16_t platform_getVbat()
 {
-	#if 0
-	sequence.channels = BIT(1); // Read ADC1 channel for charge detection
+	sequence.channels = BIT(1) | BIT(2); // Read ADC1 channel for charge detection and battery voltage together
     // Read ADC value
     int ret = adc_read(adc_dev, &sequence);
     if (ret < 0) {
@@ -231,46 +240,27 @@ uint16_t platform_getVbat()
         return 0;
     }
 
-	int32_t raw_value = adc_raw_buffer[0];
-
-	int32_t mv_value = raw_value - 2048;
-	adc_raw_to_millivolts(adc_vref, ADC_GAIN_1, 11 /* adb resolution */, &mv_value);
-	printk(" adc1(%d) = %d mV  ", raw_value, mv_value);
-
-	if (raw_value > 2100) {   // TODO: Adjust threshold based on actual measurements of charge detection pin voltage when charging vs not charging
-		printf("Charging\n");
+	if (adc_raw_buffer[0] > ADC_RAW_CHARGING_THRESHOLD) {   // TODO: Adjust threshold based on actual measurements of charge detection pin voltage when charging vs not charging
+        if (!is_battery_charging) {
+            is_battery_charging = true;
+            printk("\n** Charging started **\n");
+        }
 	} else {
-		printf("Not charging\n");
+		if (is_battery_charging) {
+            is_battery_charging = false;
+            printk("\n** Charging stopped **\n");
+        }
 	}
 
+	int32_t bat_det_value = adc_raw_buffer[1] - 2048; // Adjust for 11-bit ADC with bipolar range (-2048 to 2047)
+	adc_raw_to_millivolts(adc_vref, ADC_GAIN_1, 11 /* adb resolution */, &bat_det_value);
 
-	sequence.channels = BIT(2); // Switch to ADC2 for battery voltage reading
-	    // Read ADC value
-    ret = adc_read(adc_dev, &sequence);
-    if (ret < 0) {
-        printk("Failed to read ADC: %d\n", ret);
-        return 0;
-    }
-
-	raw_value = adc_raw_buffer[0];
-	
-	mv_value = raw_value - 2048; // Adjust for 11-bit ADC with bipolar range (-2048 to 2047)
-	adc_raw_to_millivolts(adc_vref, ADC_GAIN_1, 11 /* adb resolution */, &mv_value);
-	printk(" adc2(%d) = %d mV  ", raw_value, mv_value);
-
-    
-    // Convert ADC value to voltage (assuming 3.3V reference, 11-bit ADC)
-    uint32_t battery_voltage_mv = ((uint32_t)adc_raw_buffer[0] * 3300) / 4096;  // 2048 = 2^11 for 11-bit resolution (0-2047) / 12-bit for negative values (-2048 to 2047)
-    
     // Adapt for voltage divider 200K and 100K
-    battery_voltage_mv = battery_voltage_mv * 3;
+    uint32_t battery_voltage_mv = bat_det_value * 3;
     
-    printk("Battery ADC raw: %d, Battery: %d mV\n", adc_raw_buffer[0], battery_voltage_mv);
+    //printk("Battery: %d mV\n", battery_voltage_mv);
 
-    return (uint16_t)voltage_mv;
-#else
-	return 7200; // Return fixed value until voltage reading is working reliably
-#endif
+    return (uint16_t)battery_voltage_mv;
 }
 
 uint8_t platform_getMicLevel()
